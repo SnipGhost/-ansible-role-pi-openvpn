@@ -1,0 +1,9 @@
+---
+- include: installation.yml
+- include: easy-rsa.yml
+- include: clients.yml
+  tags: vpn-clients
+- include: openvpn.yml
+
+- name: Flush handlers
+  meta: flush_handlers

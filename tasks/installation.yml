@@ -1,0 +1,9 @@
+---
+- name: Install packages
+  package:
+    name:
+      - openvpn
+      - iptables
+      - easy-rsa
+      - libpam-google-authenticator
+    state: latest

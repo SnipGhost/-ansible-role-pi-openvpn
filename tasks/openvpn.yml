@@ -1,0 +1,42 @@
+---
+- name: Copy OpenVPN server.conf file
+  template:
+    src: openvpn_server.conf.j2
+    dest: "{{ openvpn_server_dir }}/server.conf"
+    mode: 0644
+    owner: root
+    group: root
+  notify: restart openvpn
+
+- name: Enable packet forwarding for IPv4
+  sysctl:
+    sysctl_file: /etc/sysctl.d/99-sysctl.conf
+    sysctl_set: yes
+    name: net.ipv4.ip_forward
+    value: '1'
+    state: present
+
+- name: Create OpenVPN firewall rule to allow Internet through the VPN connection
+  template:
+    src: firewall-openvpn-rules.sh.j2
+    dest: /etc/firewall-openvpn-rules.sh
+    mode: 0700
+    owner: root
+    group: root
+  when: openvpn_add_rules_script | default(false) | bool
+
+- name: Enable OpenVPN firewall rule execution in the network interface
+  lineinfile:
+    dest: /etc/network/interfaces
+    insertafter: "^iface {{ openvpn_interface }}"
+    line: ' pre-up /etc/firewall-openvpn-rules.sh'
+  notify: restart networking
+  when: openvpn_add_rules_script | default(false) | bool
+
+- name: Start OpenVPN server
+  systemd:
+    name: openvpn-server@server
+    state: started
+    daemon_reload: yes
+    enabled: yes
+  register: openvpn_server_started

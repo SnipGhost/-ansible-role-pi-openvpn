@@ -1,0 +1,12 @@
+---
+- name: restart openvpn
+  service:
+    name: openvpn-server@server
+    state: restarted
+  register: openvpn_server_restarted
+  when: not openvpn_server_started.changed
+
+- name: restart networking
+  service:
+    name: networking
+    state: restarted

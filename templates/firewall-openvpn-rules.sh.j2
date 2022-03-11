@@ -1,0 +1,3 @@
+#!/bin/sh 
+
+iptables -t nat -A POSTROUTING -s {{ openvpn_server_subnet }}/{{ openvpn_server_netmask }} -o {{ openvpn_interface }} -j SNAT --to-source {{ openvpn_local_address }}

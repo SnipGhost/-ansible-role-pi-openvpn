@@ -1,0 +1,48 @@
+#!/bin/sh
+
+DIR_CLIENT={{ openvpn_client_dir }}/$1
+DIR_EASYRSA={{ easyrsa_directory }}
+
+# Create the certificate and key
+cd ${DIR_EASYRSA}
+./easyrsa build-client-full $1 nopass
+cd -
+
+# Create a directory to save all the files
+mkdir -p ${DIR_CLIENT}
+
+# copy certificate, key, tls auth and CA
+cp -v ${DIR_EASYRSA}/pki/ca.crt $DIR_CLIENT/ca.crt
+cp -v ${DIR_EASYRSA}/pki/ta.key $DIR_CLIENT/ta.key
+cp -v ${DIR_EASYRSA}/pki/issued/$1.crt $DIR_CLIENT/
+cp -v ${DIR_EASYRSA}/pki/private/$1.key $DIR_CLIENT/
+
+# copy and customize the client configuration
+cp -v {{ openvpn_client_dir }}/client.conf ${DIR_CLIENT}/$1.ovpn
+
+# inserting certs into single ovpn file
+# ca
+echo "<ca>" >> ${DIR_CLIENT}/$1.ovpn
+cat $DIR_CLIENT/ca.crt >> ${DIR_CLIENT}/$1.ovpn
+echo "</ca>" >> ${DIR_CLIENT}/$1.ovpn
+# cert
+echo "<cert>" >> ${DIR_CLIENT}/$1.ovpn
+sed -n '/-----BEGIN CERTIFICATE-----/,$p' $DIR_CLIENT/$1.crt >> ${DIR_CLIENT}/$1.ovpn
+echo "</cert>" >> ${DIR_CLIENT}/$1.ovpn
+# key
+echo "<key>" >> ${DIR_CLIENT}/$1.ovpn
+cat $DIR_CLIENT/$1.key >> ${DIR_CLIENT}/$1.ovpn
+echo "</key>" >> ${DIR_CLIENT}/$1.ovpn
+# tls
+echo "<tls-crypt>" >> ${DIR_CLIENT}/$1.ovpn
+sed -n '/-----BEGIN OpenVPN Static key V1-----/,$p' $DIR_CLIENT/ta.key >> ${DIR_CLIENT}/$1.ovpn
+echo "</tls-crypt>" >> ${DIR_CLIENT}/$1.ovpn
+
+# create a new local user
+# PASS=$(head -n 4096 /dev/urandom | tr -dc a-zA-Z0-9 | cut -b 1-20)
+# useradd -m $1
+# echo $PASS | passwd --stdin $1
+# echo $PASS >> ${DIR_CLIENT}/sshpass.txt
+
+# run the google authenticator as the local user and save the code
+# su $1 -c /usr/local/bin/google-authenticator -C -t -f -D -r 3 -Q UTF8 -R 30 -w3 ${DIR_CLIENT}/authenticator_code.txt

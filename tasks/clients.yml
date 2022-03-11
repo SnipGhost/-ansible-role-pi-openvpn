@@ -1,0 +1,26 @@
+---
+- name: Create directory for clients configuration
+  file:
+    path: "{{ openvpn_client_dir }}"
+    state: directory
+    mode: 0700
+
+- name: Copy OpenVPN client.conf file
+  template:
+    src: openvpn_client.conf.j2
+    dest: "{{ openvpn_client_dir }}/client.conf"
+    mode: 0644
+    owner: root
+    group: root
+
+- name: Copy make_vpn_user.sh script
+  template:
+    src: make_vpn_user.sh.j2
+    dest: "{{ openvpn_client_dir }}/make_vpn_user.sh"
+    mode: 0700
+    owner: root
+    group: root
+
+- name: Create VPN-clients
+  shell: "{{ openvpn_client_dir }}/make_vpn_user.sh {{ item.username }}"
+  with_items: "{{ openvpn_clients }}"

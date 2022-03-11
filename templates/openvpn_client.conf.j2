@@ -1,0 +1,28 @@
+client
+dev tun
+proto {{ openvpn_protocol }}
+remote {{ openvpn_local_address }} 1194
+;remote my-server-2 1194
+
+resolv-retry infinite
+nobind
+persist-key
+persist-tun
+user nobody
+group nogroup
+remote-cert-tls server
+cipher AES-256-GCM
+auth SHA256
+key-direction 1
+comp-lzo
+verb 3
+
+; script-security 2
+; up /etc/openvpn/update-resolv-conf
+; down /etc/openvpn/update-resolv-conf
+
+; script-security 2
+; up /etc/openvpn/update-systemd-resolved
+; down /etc/openvpn/update-systemd-resolved
+; down-pre
+; dhcp-option DOMAIN-ROUTE .
