@@ -1,48 +1,97 @@
 #!/bin/sh
 
+# Config
 DIR_CLIENT={{ openvpn_client_dir }}/$1
 DIR_EASYRSA={{ easyrsa_directory }}
+GROUP=remote
 
 # Create the certificate and key
-cd ${DIR_EASYRSA}
-./easyrsa build-client-full $1 nopass
-cd -
+if [ ! -f ${DIR_EASYRSA}/pki/issued/$1.crt ]; then
+	cd ${DIR_EASYRSA}
+	./easyrsa build-client-full $1 nopass
+	cd -
+fi
 
 # Create a directory to save all the files
 mkdir -p ${DIR_CLIENT}
 
-# copy certificate, key, tls auth and CA
+# Copy certificate, key, tls auth and CA
 cp -v ${DIR_EASYRSA}/pki/ca.crt $DIR_CLIENT/ca.crt
 cp -v ${DIR_EASYRSA}/pki/ta.key $DIR_CLIENT/ta.key
 cp -v ${DIR_EASYRSA}/pki/issued/$1.crt $DIR_CLIENT/
 cp -v ${DIR_EASYRSA}/pki/private/$1.key $DIR_CLIENT/
 
-# copy and customize the client configuration
-cp -v {{ openvpn_client_dir }}/client.conf ${DIR_CLIENT}/$1.ovpn
+# Copy and customize the client configuration
+cp -v {{ openvpn_client_dir }}/client.conf ${DIR_CLIENT}/{{ openvpn_name }}.ovpn
 
-# inserting certs into single ovpn file
+# Inserting certs into single ovpn file
 # ca
-echo "<ca>" >> ${DIR_CLIENT}/$1.ovpn
-cat $DIR_CLIENT/ca.crt >> ${DIR_CLIENT}/$1.ovpn
-echo "</ca>" >> ${DIR_CLIENT}/$1.ovpn
+echo "<ca>" >> ${DIR_CLIENT}/{{ openvpn_name }}.ovpn
+cat $DIR_CLIENT/ca.crt >> ${DIR_CLIENT}/{{ openvpn_name }}.ovpn
+echo "</ca>" >> ${DIR_CLIENT}/{{ openvpn_name }}.ovpn
 # cert
-echo "<cert>" >> ${DIR_CLIENT}/$1.ovpn
-sed -n '/-----BEGIN CERTIFICATE-----/,$p' $DIR_CLIENT/$1.crt >> ${DIR_CLIENT}/$1.ovpn
-echo "</cert>" >> ${DIR_CLIENT}/$1.ovpn
+echo "<cert>" >> ${DIR_CLIENT}/{{ openvpn_name }}.ovpn
+sed -n '/-----BEGIN CERTIFICATE-----/,$p' $DIR_CLIENT/$1.crt >> ${DIR_CLIENT}/{{ openvpn_name }}.ovpn
+echo "</cert>" >> ${DIR_CLIENT}/{{ openvpn_name }}.ovpn
 # key
-echo "<key>" >> ${DIR_CLIENT}/$1.ovpn
-cat $DIR_CLIENT/$1.key >> ${DIR_CLIENT}/$1.ovpn
-echo "</key>" >> ${DIR_CLIENT}/$1.ovpn
+echo "<key>" >> ${DIR_CLIENT}/{{ openvpn_name }}.ovpn
+cat $DIR_CLIENT/$1.key >> ${DIR_CLIENT}/{{ openvpn_name }}.ovpn
+echo "</key>" >> ${DIR_CLIENT}/{{ openvpn_name }}.ovpn
 # tls
-echo "<tls-crypt>" >> ${DIR_CLIENT}/$1.ovpn
-sed -n '/-----BEGIN OpenVPN Static key V1-----/,$p' $DIR_CLIENT/ta.key >> ${DIR_CLIENT}/$1.ovpn
-echo "</tls-crypt>" >> ${DIR_CLIENT}/$1.ovpn
+echo "<tls-crypt>" >> ${DIR_CLIENT}/{{ openvpn_name }}.ovpn
+sed -n '/-----BEGIN OpenVPN Static key V1-----/,$p' $DIR_CLIENT/ta.key >> ${DIR_CLIENT}/{{ openvpn_name }}.ovpn
+echo "</tls-crypt>" >> ${DIR_CLIENT}/{{ openvpn_name }}.ovpn
 
-# create a new local user
-# PASS=$(head -n 4096 /dev/urandom | tr -dc a-zA-Z0-9 | cut -b 1-20)
-# useradd -m $1
-# echo $PASS | passwd --stdin $1
-# echo $PASS >> ${DIR_CLIENT}/sshpass.txt
+# Create a new local user if not exist
+if grep "${1}" /etc/passwd >/dev/null 2>&1; then
+    echo "Local user $1 exists"
+else
+	echo -e "\nCreate new local user $1"
+    PASS=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 8)
+	useradd -m $1
+	usermod -aG $GROUP $1
+	echo "${1}:${PASS}" | chpasswd
+	echo $PASS >> ${DIR_CLIENT}/pin.txt
+	SSH_KEY="${DIR_CLIENT}/id_rsa"
+	ssh-keygen -b 2048 -t rsa -f "$SSH_KEY" -q -N ""
+	mkdir -p /home/${1}/.ssh
+	cat "${SSH_KEY}.pub" > /home/${1}/.ssh/authorized_keys
+	chown -R ${1}:${1} /home/${1}/.ssh
+	chmod 700 /home/${1}/.ssh
+	chmod 644 /home/${1}/.ssh/authorized_keys
+	
+	PASSPHRASE="{{ onetimesecret_passphrase }}"
+	TTL=1209600
+	ONETIMETOKEN=$(cat {{ openvpn_client_dir }}/onetimesecret.token)
+	ONETIMELINK=$(curl -s -d "passphrase=${PASSPHRASE}&secret=${PASS}&ttl=${TTL}" -u "${ONETIMETOKEN}" https://onetimesecret.com/api/v1/share | jq -r ".secret_key")
+	echo "https://onetimesecret.com/secret/${ONETIMELINK}" >> ${DIR_CLIENT}/pin.link
+	echo "====================================================================="
+	echo "PIN: https://onetimesecret.com/secret/${ONETIMELINK}"
+	echo "====================================================================="
+fi
 
-# run the google authenticator as the local user and save the code
-# su $1 -c /usr/local/bin/google-authenticator -C -t -f -D -r 3 -Q UTF8 -R 30 -w3 ${DIR_CLIENT}/authenticator_code.txt
+chown -R ${1}:${1} ${DIR_CLIENT}
+chmod 770 ${DIR_CLIENT}
+
+if [ ! -f "${DIR_CLIENT}/authenticator_codes.txt" ]; then
+	# Run the google authenticator as the local user and save the code
+	su $1 -c "google-authenticator -t -f -D -r 3 -Q none -R 30 -w3 -s ${DIR_CLIENT}/otp > ${DIR_CLIENT}/authenticator_codes.txt"
+fi
+
+AUTH_CODE_SECRET=$(head -n1 ${DIR_CLIENT}/authenticator_codes.txt | cut -f2 -d\: | tr -d ' ')
+
+qrencode -t PNG "otpauth://totp/${1}@{{ ansible_hostname }}?secret=${AUTH_CODE_SECRET}&issuer={{ ansible_hostname }}" -o ${DIR_CLIENT}/authenticator_qr.png
+qrencode -t ANSI "otpauth://totp/${1}@{{ ansible_hostname }}?secret=${AUTH_CODE_SECRET}&issuer={{ ansible_hostname }}" > ${DIR_CLIENT}/authenticator_qr.txt
+
+{% if openvpn_smtp_enabled | default(false) | bool %}
+# Send one factor of auth via SMTP
+MSG_TPL_PATH="{{ openvpn_client_dir }}/mail.tpl"
+
+if [ "$2" != "" ]; then
+	export SUBJECT="{{ openvpn_smtp_subject }}"
+	export USERNAME="$1"
+	export TO="$2"
+	cat "$MSG_TPL_PATH" | envsubst | mutt -s "$SUBJECT" -a "${DIR_CLIENT}/authenticator_codes.txt" "${DIR_CLIENT}/authenticator_qr.png" "${DIR_CLIENT}/authenticator_qr.txt" "${DIR_CLIENT}/{{ openvpn_name }}.ovpn" "$SSH_KEY" -- "$TO"
+fi
+
+{% endif %}

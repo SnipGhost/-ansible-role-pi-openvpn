@@ -1,0 +1,22 @@
+---
+- name: Install packages
+  package:
+    name:
+      - mutt
+    state: latest
+
+- name: Copy smtp conf file
+  template:
+    src: muttrc.j2
+    dest: /root/.muttrc
+    mode: 0640
+    owner: root
+    group: root
+
+- name: Copy mail template file
+  template:
+    src: mail.tpl.j2
+    dest: "{{ openvpn_client_dir }}/mail.tpl"
+    mode: 0644
+    owner: root
+    group: root

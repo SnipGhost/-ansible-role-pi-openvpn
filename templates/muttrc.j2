@@ -1,0 +1,10 @@
+set realname = "Admin ArgoBay"
+set from = {{ smtp_user }}
+set use_from = yes
+
+set smtp_url = smtp://{{ smtp_user }}@{{ smtp_host }}/
+set smtp_pass = {{ smtp_pass }}
+set smtp_authenticators = 'login'
+
+set ssl_starttls = yes
+set ssl_force_tls = yes

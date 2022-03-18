@@ -28,15 +28,12 @@ openvpn_server_tun0: 10.8.0.1         # The IP for the OpenVPN tunnel interface
 openvpn_server_tun0_ptp: 10.8.0.2     # The IP for the OpenVPN tunnel point-to-point alias
 
 # Real network
-openvpn_local_address: "{{ ansible_default_ipv4['address'] }}" # The default local IP address
-openvpn_local_subnet: "{{ ansible_default_ipv4['network'] }}"  # The local subnet where the Raspberry Pi is connected
-openvpn_local_netmask: "{{ ansible_default_ipv4['netmask'] }}" # The local netmask for the Raspberry Pi subnet
-openvpn_interface: "{{ ansible_default_ipv4['interface'] }}"   # The local interface for the Raspberry Pi
+openvpn_remote_address: "{{ ansible_default_ipv4['address'] }}" # Remote external address
+openvpn_local_address: "{{ ansible_default_ipv4['address'] }}"  # The default local IP address
+openvpn_local_subnet: "{{ ansible_default_ipv4['network'] }}"   # The local subnet where the Raspberry Pi is connected
+openvpn_local_netmask: "{{ ansible_default_ipv4['netmask'] }}"  # The local netmask for the Raspberry Pi subnet
+openvpn_interface: "{{ ansible_default_ipv4['interface'] }}"    # The local interface for the Raspberry Pi
 openvpn_dns_ip: 192.168.0.1 # If your router does not do DNS, you can use Google DNS 8.8.8.8
-
-# OpenVPN clients list
-openvpn_clients:
-  - username: ""
 
 easyrsa_directory: /etc/openvpn/easy-rsa
 openvpn_client_dir: /etc/openvpn/client
@@ -44,3 +41,16 @@ openvpn_server_dir: /etc/openvpn/server
 
 # Add firewall-openvpn-rules.sh to iface config
 openvpn_add_rules_script: no
+
+# Install ssmtp to send credentials via emails
+openvpn_smtp_enabled: no
+openvpn_smtp_from: "Admin ArgoBay <{{ smtp_from }}>"
+openvpn_smtp_subject: "ArgoBay VPN credentials"
+
+# OpenVPN clients list
+openvpn_name: my-vpn
+openvpn_clients:
+  - username: ""
+
+# Force to recreate vpn clients
+openvpn_force_clients: no

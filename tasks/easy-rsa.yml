@@ -30,7 +30,7 @@
 # [On dedicated CA node]
 - name: Check if Easy RSA keys directory exists
   stat:
-    path: "{{ easyrsa_directory }}/keys"
+    path: "{{ easyrsa_directory }}/pki"
   register: easykeysdir
 
 # [On dedicated CA node]
@@ -42,7 +42,7 @@
   args:
     executable: /bin/bash
     chdir: "{{ easyrsa_directory }}"
-  when: easykeysdir.stat.exists == False
+  when: not easykeysdir.stat.exists
   register: easyrsaconfig
 
 - name: Check request
@@ -57,7 +57,7 @@
   args:
     executable: /bin/bash
     chdir: "{{ easyrsa_directory }}"
-  when: easyrsarequest.stat.exists == False
+  when: not easyrsarequest.stat.exists
 
 - name: Copy server cert key to config
   copy:
@@ -66,7 +66,7 @@
     dest: "{{ openvpn_server_dir }}/{{ ansible_hostname }}.key"
     owner: root
     group: root
-    mode: 0640
+    mode: 0600
 
 # [On dedicated CA node]
 - name: Check signed server cert
@@ -82,7 +82,7 @@
   args:
     executable: /bin/bash
     chdir: "{{ easyrsa_directory }}"
-  when: easyrsasigned.stat.exists == False
+  when: not easyrsasigned.stat.exists
 
 - name: Copy signed server cert and CA cert to config
   copy:
@@ -91,14 +91,14 @@
     dest: "{{ openvpn_server_dir }}"
     owner: root
     group: root
-    mode: 0640
+    mode: 0600
   with_items:
     - "{{ easyrsa_directory }}/pki/issued/{{ ansible_hostname }}.crt"
     - "{{ easyrsa_directory }}/pki/ca.crt"
 
 - name: Check HMAC sign
   stat:
-    path: "{{ easyrsa_directory }}/ta.key"
+    path: "{{ easyrsa_directory }}/pki/ta.key"
   register: easyrsahmac
 
 - name: Create HMAC sign (may take a while)
@@ -106,7 +106,7 @@
   args:
     executable: /bin/bash
     chdir: "{{ easyrsa_directory }}/pki"
-  when: easyrsahmac.stat.exists == False
+  when: not easyrsahmac.stat.exists
 
 - name: Copy HMAC sign to config
   copy:
@@ -115,60 +115,26 @@
     dest: "{{ openvpn_server_dir }}"
     owner: root
     group: root
-    mode: 0640
+    mode: 0600
 
-# - name: Modify pkitool to allow passout client password
-#   replace:
-#     dest: "{{ easyrsa_directory }}/pkitool"
-#     regexp: 'NODES_REQ=""'
-#     replace: 'NODES_REQ="-passout env:KEY_PASSWORD"'
-#     backup: yes
+- name: Check Certificate Revocation List
+  stat:
+    path: "{{ easyrsa_directory }}/pki/crl.pem"
+  register: easyrsacrl
 
-# - name: Check if Easy RSA client certificate exists
-#   stat:
-#     path: "{{ easyrsa_directory }}/keys/{{ item.username }}.key"
-#   register: easyclient
-#   when: item != ""
-#   with_items: "{{ openvpn_clients }}"
+# [On dedicated CA node]
+- name: Generate a Certificate Revocation List
+  shell: ./easyrsa gen-crl
+  args:
+    executable: /bin/bash
+    chdir: "{{ easyrsa_directory }}"
+  when: not easyrsacrl.stat.exists
 
-# - name: Create Easy RSA certificate for OpenVPN client
-#   shell: source ./vars && ./build-key-pass "{{ item.username }}"
-#   args:
-#     executable: /bin/bash
-#     chdir: "{{ easyrsa_directory }}"
-#   environment:
-#     KEY_PASSWORD: "{{ item.password }}"
-#   when: easyclient is defined and easyclient.results.stat.exists == False
-#   with_items: "{{ openvpn_clients }}"
-
-# - name: Check if Easy RSA DES3 client certificate exists
-#   stat:
-#     path: "{{ easyrsa_directory }}/keys/{{ item.username }}.3des.key"
-#   register: easyclientdes3
-#   when: item != ""
-#   with_items: "{{ openvpn_clients }}"
-
-# - name: Convert OpenVPN client key to DES3 for Android or iOS clients
-#   shell: openssl rsa -in "{{ item.username }}.key" -des3 -out "{{ item.username }}.3des.key" -passin pass:$KEY_PASSWORD -passout pass:$KEY_PASSWORD
-#   args:
-#     executable: /bin/bash
-#     chdir: "{{ easyrsa_directory }}/keys"
-#   environment:
-#     KEY_PASSWORD: "{{ item.password }}"
-#   when: easyclientdes3 is defined and easyclientdes3.results.stat.exists == False 
-#   with_items: "{{ openvpn_clients }}"
-
-# - name: Check if Easy RSA DH pem exists
-#   stat:
-#     path: "{{ easyrsa_directory }}/keys/dh{{ easyrsa_key_size }}.pem"
-#   register: easydh
-
-# - name: Build Easy RSA DH (will take a while)
-#   shell: source ./vars && ./build-dh
-#   args:
-#     executable: /bin/bash
-#     chdir: "{{ easyrsa_directory }}"
-#   async: 5000
-#   poll: 30
-#   notify: restart openvpn
-#   when: easydh.stat.exists == False
+- name: Copy CRL to config
+  copy:
+    remote_src: yes
+    src: "{{ easyrsa_directory }}/pki/crl.pem"
+    dest: "{{ openvpn_server_dir }}"
+    owner: root
+    group: root
+    mode: 0600

@@ -3,10 +3,13 @@ dev tun
 proto {{ openvpn_protocol }}
 port {{ openvpn_port }}
 
+plugin openvpn-plugin-auth-pam.so openvpn
+
 ca {{ openvpn_server_dir }}/ca.crt
 cert {{ openvpn_server_dir }}/{{ ansible_hostname }}.crt
 key {{ openvpn_server_dir }}/{{ ansible_hostname }}.key
 dh none
+crl-verify {{ openvpn_server_dir }}/crl.pem
 
 server {{ openvpn_server_subnet }} {{ openvpn_server_netmask }}
 ifconfig {{ openvpn_server_tun0 }} {{ openvpn_server_tun0_ptp }}
@@ -18,7 +21,7 @@ push "route {{ openvpn_server_tun0 }} 255.255.255.255"
 push "route {{ openvpn_server_subnet }} {{ openvpn_server_netmask }}"
 
 # Your local subnet
-push "route {{ openvpn_local_address }} {{ openvpn_local_netmask }}"
+push "route {{ openvpn_local_subnet }} {{ openvpn_local_netmask }}"
 
 # Set primary domain name server address to the SOHO Router
 # If your router does not do DNS, you can use Google DNS 8.8.8.8
@@ -27,7 +30,7 @@ push "dhcp-option DNS {{ openvpn_dns_ip }}"
 # Override the Client default gateway by using 0.0.0.0/1 and
 # 128.0.0.0/1 rather than 0.0.0.0/0. This has the benefit of
 # overriding but not wiping out the original default gateway.
-# push "redirect-gateway def1"
+#push "redirect-gateway def1"
 
 client-to-client
 duplicate-cn
@@ -37,7 +40,6 @@ tls-crypt {{ openvpn_server_dir }}/ta.key
 cipher AES-256-GCM
 auth SHA256
 
-comp-lzo
 user nobody
 group nogroup
 persist-key

@@ -6,4 +6,6 @@
       - iptables
       - easy-rsa
       - libpam-google-authenticator
+      - qrencode
+      - jq
     state: latest

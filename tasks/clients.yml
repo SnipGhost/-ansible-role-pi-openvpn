@@ -3,13 +3,23 @@
   file:
     path: "{{ openvpn_client_dir }}"
     state: directory
-    mode: 0700
+    owner: root
+    group: remote
+    mode: 0775
 
 - name: Copy OpenVPN client.conf file
   template:
     src: openvpn_client.conf.j2
     dest: "{{ openvpn_client_dir }}/client.conf"
-    mode: 0644
+    mode: 0640
+    owner: root
+    group: root
+
+- name: Create onetimesecret config
+  copy:
+    dest: "{{ openvpn_client_dir }}/onetimesecret.token"
+    content: "{{ onetimesecret_token }}"
+    mode: 0600
     owner: root
     group: root
 
@@ -21,6 +31,13 @@
     owner: root
     group: root
 
-- name: Create VPN-clients
-  shell: "{{ openvpn_client_dir }}/make_vpn_user.sh {{ item.username }}"
+- name: Check VPN-clients
+  stat:
+    path: "{{ openvpn_client_dir }}/{{ item.username }}/{{ openvpn_name }}.ovpn"
+  register: stat_vpn_clients
   with_items: "{{ openvpn_clients }}"
+
+- name: Create VPN-clients
+  shell: "{{ openvpn_client_dir }}/make_vpn_user.sh {{ item.item.username }} {{ item.item.email | default('') }}"
+  when: not item.stat.exists or openvpn_force_clients | default(false) | bool
+  with_items: "{{ stat_vpn_clients.results }}"

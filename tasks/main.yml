@@ -1,8 +1,14 @@
 ---
 - include: installation.yml
 - include: easy-rsa.yml
+
+- include: smtp.yml
+  tags: vpn-clients
+  when: openvpn_smtp_enabled | default(false) | bool
+
 - include: clients.yml
   tags: vpn-clients
+
 - include: openvpn.yml
 
 - name: Flush handlers

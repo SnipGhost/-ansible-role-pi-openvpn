@@ -8,6 +8,15 @@
     group: root
   notify: restart openvpn
 
+- name: Copy OpenVPN pam.d file
+  template:
+    src: openvpn.pam.j2
+    dest: /etc/pam.d/openvpn
+    mode: 0644
+    owner: root
+    group: root
+  notify: restart openvpn
+
 - name: Enable packet forwarding for IPv4
   sysctl:
     sysctl_file: /etc/sysctl.d/99-sysctl.conf
